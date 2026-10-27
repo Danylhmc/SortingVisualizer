@@ -11,10 +11,16 @@
 #include "stb_image.h"
 #include <iostream>
 #include <algorithm>
+#include <array>
+#include <memory>
 #include <numeric>
 #include <random>
+#include <string>
 #include "shader.hpp"
 #include "world.hpp"
+#include "benchMark.hpp"
+#include "csv_reader.hpp"
+#include "graph.hpp"
 
 static int scr_width = 1000;
 static int scr_height = 600;
@@ -194,6 +200,98 @@ double delayMs(){
   return (5.0 + 495.0 * std::pow(1.0 - speed / 100.0, 2.0))/100.0;
 }
 
+const std::array<std::string, 3> cases = {"best", "worst", "random"};
+const std::array<std::string, 3> algorithms = {"Bubble", "Selection", "Insertion"};
+const std::array<glm::vec3, 3> colors = {{{1.0f, 0.0f, 0.0f}, {0.0f, 0.65f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
+
+GLFWwindow* mainWindow = nullptr;
+GLFWwindow* graphWindow = nullptr;
+std::array<std::unique_ptr<Graph>, 3> graphs;
+int selectedCase = 0;
+int graphWidth = 1000;
+int graphHeight = 600;
+bool graphResultsLoaded = false;
+
+void updateGraphWindowTitle(){
+  const std::array<const char*, 3> caseTitles = {
+    "meilleur cas (entree deja triee)",
+    "pire cas (entree en ordre inverse)",
+    "cas aleatoire"
+  };
+  std::string title = "SortingVisualizer - " + std::string(caseTitles[selectedCase]);
+  title += " | rouge: Bubble, vert: Selection, bleu: Insertion | x: n, y: temps (us) | touches 1-3";
+  glfwSetWindowTitle(graphWindow, title.c_str());
+}
+
+void loadResults(){
+  if (graphResultsLoaded)
+    return;
+
+  loadBenchmark();
+  const std::vector<BenchmarckResult> results = read_csv();
+  std::array<std::array<std::vector<Point>, 3>, 3> pointsByCaseAndAlgorithm;
+
+  for (const BenchmarckResult& result : results) {
+    const auto algorithmIt = std::find(algorithms.begin(), algorithms.end(), result.algorithm);
+    const auto caseIt = std::find(cases.begin(), cases.end(), result.testCase);
+    if (algorithmIt == algorithms.end() || caseIt == cases.end())
+      continue;
+
+    const std::size_t algorithmIndex = static_cast<std::size_t>(algorithmIt - algorithms.begin());
+    const std::size_t caseIndex = static_cast<std::size_t>(caseIt - cases.begin());
+    pointsByCaseAndAlgorithm[caseIndex][algorithmIndex].push_back({
+      static_cast<float>(result.n),
+      static_cast<float>(result.timeUs),
+      colors[algorithmIndex]
+    });
+  }
+
+  if (results.empty()) {
+    std::cerr << "Aucun resultat de benchmark n'a pu etre charge.\n";
+    return;
+  }
+
+  glfwMakeContextCurrent(graphWindow);
+  for (std::size_t caseIndex = 0; caseIndex < cases.size(); ++caseIndex) {
+    std::vector<std::vector<Point>> series;
+    series.reserve(algorithms.size());
+    for (std::size_t algorithmIndex = 0; algorithmIndex < algorithms.size(); ++algorithmIndex) {
+      series.push_back(std::move(pointsByCaseAndAlgorithm[caseIndex][algorithmIndex]));
+    }
+    graphs[caseIndex] = std::make_unique<Graph>(std::move(series), graphWidth, graphHeight);
+  }
+  graphResultsLoaded = true;
+  selectedCase = 0;
+  updateGraphWindowTitle();
+  glfwMakeContextCurrent(mainWindow);
+}
+
+void toggleGraphWindow(){
+  loadResults();
+  if (!graphResultsLoaded)
+    return;
+
+  if (glfwGetWindowAttrib(graphWindow, GLFW_VISIBLE)) {
+    glfwHideWindow(graphWindow);
+  } else {
+    updateGraphWindowTitle();
+    glfwShowWindow(graphWindow);
+    glfwFocusWindow(graphWindow);
+  }
+}
+
+static void graphKeyCallback(GLFWwindow* window, int key, int, int action, int){
+  if (action == GLFW_RELEASE)
+    return;
+
+  if (key >= GLFW_KEY_1 && key <= GLFW_KEY_3 && action == GLFW_PRESS) {
+    selectedCase = key - GLFW_KEY_1;
+    updateGraphWindowTitle();
+  } else if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+    glfwHideWindow(window);
+  }
+}
+
 static void resizeSceneFramebuffer(int width, int height) {
   if (sceneFramebuffer == 0) return;
   glBindTexture(GL_TEXTURE_2D, sceneColorTexture);
@@ -208,57 +306,61 @@ glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 static void key_callback(GLFWwindow* window, int key, int, int action, int) {
-    if (action == GLFW_RELEASE) return;
-    bool press = action == GLFW_PRESS;
+  if (action == GLFW_RELEASE) return;
+  bool press = action == GLFW_PRESS;
 
-    if (key >= GLFW_KEY_1 && key <= GLFW_KEY_4){
-      if (press){
-        algo = key - GLFW_KEY_1;
-        reset();
+  if (key >= GLFW_KEY_1 && key <= GLFW_KEY_3){
+    if (press){
+      algo = key - GLFW_KEY_1;
+      reset();
+    }
+    return;
+  }
+
+  switch (key) {
+    case GLFW_KEY_ESCAPE:
+      if (press) glfwSetWindowShouldClose(window, true);
+      break;
+
+    case GLFW_KEY_SPACE:
+      if (press && !done){
+        running = !running;
       }
-      return;
-    }
+      break;
 
-    switch (key) {
-      case GLFW_KEY_ESCAPE:
-        if (press) glfwSetWindowShouldClose(window, true);
-        break;
+    case GLFW_KEY_RIGHT:
+      running = false;
+      if(!done) step();
+      break;
 
-      case GLFW_KEY_SPACE:
-        if (press && !done){
-          running = !running;
-        }
-        break;
+    case GLFW_KEY_R:
+      if (press) reset();
+      break;
 
-      case GLFW_KEY_RIGHT:
-        running = false;
-        if(!done) step();
-        break;
+    case GLFW_KEY_UP:
+      speed = std::min(200, speed + 5);
+      break;
 
-      case GLFW_KEY_R:
-        if (press) reset();
-        break;
+    case GLFW_KEY_DOWN:
+      speed = std::max(0,   speed - 5);
+      break;
 
-      case GLFW_KEY_UP:
-        speed = std::min(200, speed + 5);
-        break;
+    case GLFW_KEY_EQUAL:
+    case GLFW_KEY_KP_ADD:
+      n = std::min(120, n + 1);
+      reset();
+      break;
 
-      case GLFW_KEY_DOWN:
-        speed = std::max(0,   speed - 5);
-        break;
+    case GLFW_KEY_MINUS:
+    case GLFW_KEY_KP_SUBTRACT:
+      n = std::max(8,   n - 1);
+      reset();
+      break;
 
-      case GLFW_KEY_EQUAL:
-      case GLFW_KEY_KP_ADD:
-        n = std::min(120, n + 1);
-        reset();
-        break;
-
-      case GLFW_KEY_MINUS:
-      case GLFW_KEY_KP_SUBTRACT:
-        n = std::max(8,   n - 1);
-        reset();
-        break;
-    }
+    case GLFW_KEY_L:
+      if (press) toggleGraphWindow();
+      break;
+  }
 }
 
 bool firstMouse = true;
@@ -308,11 +410,29 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
 }
 
 void frameBufferSize_callback(GLFWwindow* window, int width, int height){
+  if (width <= 0 || height <= 0)
+    return;
+  glfwMakeContextCurrent(window);
   glViewport(0, 0, width, height);
 
   scr_width = width;
   scr_height = height;
   resizeSceneFramebuffer(width, height);
+}
+
+void graphFrameBufferSize_callback(GLFWwindow* window, int width, int height){
+  if (width <= 0 || height <= 0)
+    return;
+  glfwMakeContextCurrent(window);
+  glViewport(0, 0, width, height);
+  graphWidth = width;
+  graphHeight = height;
+  for (auto& graph : graphs) {
+    if (graph) {
+      graph->buildBuffer(graphWidth, graphHeight);
+      graph->setMesh();
+    }
+  }
 }
 
 void handleInputs(GLFWwindow* window){
@@ -341,22 +461,27 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  GLFWwindow* window = glfwCreateWindow(scr_width, scr_height,"Sorting Visualizer",nullptr, nullptr);
+  mainWindow = glfwCreateWindow(scr_width, scr_height,"Sorting Visualizer",nullptr, nullptr);
+  glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+  graphWindow = glfwCreateWindow(scr_width, scr_height,"Graph",nullptr, nullptr);
+  glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
 
-  if (!window) {
+  if (!mainWindow || !graphWindow) {
     glfwTerminate();
-    std::cerr << "Error window\n";
+    std::cerr << "Error creating a window\n";
     return -1;
   }
 
-  mouse_callback(window, 0, 0);
+  mouse_callback(mainWindow, 0, 0);
 
-  glfwMakeContextCurrent(window);
-  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-  glfwSetKeyCallback(window, key_callback);
-  glfwSetCursorPosCallback(window, mouse_callback);
-  glfwSetScrollCallback(window, scroll_callback);
-  glfwSetFramebufferSizeCallback(window, frameBufferSize_callback);
+  glfwMakeContextCurrent(mainWindow);
+  glfwSetInputMode(mainWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  glfwSetKeyCallback(mainWindow, key_callback);
+  glfwSetCursorPosCallback(mainWindow, mouse_callback);
+  glfwSetScrollCallback(mainWindow, scroll_callback);
+  glfwSetFramebufferSizeCallback(mainWindow, frameBufferSize_callback);
+  glfwSetKeyCallback(graphWindow, graphKeyCallback);
+  glfwSetFramebufferSizeCallback(graphWindow, graphFrameBufferSize_callback);
 
   if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
     glfwTerminate();
@@ -473,11 +598,16 @@ int main() {
 
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-  while (!glfwWindowShouldClose(window)) {
+  while (!glfwWindowShouldClose(mainWindow)) {
     glfwPollEvents();
+    if (glfwWindowShouldClose(graphWindow)) {
+      glfwHideWindow(graphWindow);
+      glfwSetWindowShouldClose(graphWindow, GLFW_FALSE);
+    }
+    glfwMakeContextCurrent(mainWindow);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    handleInputs(window);
+    handleInputs(mainWindow);
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
     glm::mat4 projection = glm::perspective(glm::radians(fov), (float)scr_width/(float)scr_height, 0.1f, 1000.0f);
@@ -538,10 +668,26 @@ int main() {
     glBindVertexArray(textVao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glfwSwapBuffers(window);
+    glfwSwapBuffers(mainWindow);
+
+    if (graphResultsLoaded && glfwGetWindowAttrib(graphWindow, GLFW_VISIBLE)) {
+      glfwMakeContextCurrent(graphWindow);
+      glViewport(0, 0, graphWidth, graphHeight);
+      glClearColor(0.96f, 0.96f, 0.96f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      if (graphs[selectedCase])
+        graphs[selectedCase]->draw();
+      glfwSwapBuffers(graphWindow);
+    }
   }
 
-  glfwDestroyWindow(window);
+  glfwMakeContextCurrent(graphWindow);
+  for (auto& graph : graphs)
+    graph.reset();
+  glfwSetFramebufferSizeCallback(mainWindow, nullptr);
+  glfwSetFramebufferSizeCallback(graphWindow, nullptr);
+  glfwDestroyWindow(graphWindow);
+  glfwDestroyWindow(mainWindow);
   glfwTerminate();
 
   return 0;

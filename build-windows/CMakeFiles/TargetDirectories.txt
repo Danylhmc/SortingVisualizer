@@ -1,0 +1,3 @@
+/home/danyl/Projects/Graphics/SortingVisualizer/build-windows/CMakeFiles/SortingVisualizer.dir
+/home/danyl/Projects/Graphics/SortingVisualizer/build-windows/CMakeFiles/edit_cache.dir
+/home/danyl/Projects/Graphics/SortingVisualizer/build-windows/CMakeFiles/rebuild_cache.dir

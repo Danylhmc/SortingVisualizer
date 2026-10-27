@@ -1,0 +1,18 @@
+# ninja log v7
+3	371	1793042037348349970	CMakeFiles/SortingVisualizer.dir/src/cube.cpp.obj	21f01562e1bb2e8f
+3	569	1793042037348524657	CMakeFiles/SortingVisualizer.dir/external/glad/src/glad.c.obj	141e6e0572344d98
+2	675	1793042037348144037	CMakeFiles/SortingVisualizer.dir/src/shader.cpp.obj	7cb37f4e10b9428a
+2	4330	1793042037347093185	CMakeFiles/SortingVisualizer.dir/src/main.cpp.obj	1782e35b6c493d74
+4330	5317	1793042041675087389	SortingVisualizer.exe	cdf6afac55c89bea
+20	839	1793142143749256842	CMakeFiles/SortingVisualizer.dir/src/graph.cpp.obj	4385805808944bea
+19	872	1793142143749108535	CMakeFiles/SortingVisualizer.dir/src/csv_reader.cpp.obj	73d91cfa3f739043
+19	1172	1793142143748958257	CMakeFiles/SortingVisualizer.dir/src/benchMark.cpp.obj	180c368472f13ee9
+19	5253	1793142143748070747	CMakeFiles/SortingVisualizer.dir/src/main.cpp.obj	1782e35b6c493d74
+5253	5350	1793142148982127110	SortingVisualizer.exe	1cf0baf79c496c6d
+1	812	1793142162588129126	CMakeFiles/SortingVisualizer.dir/src/graph.cpp.obj	4385805808944bea
+812	872	1793142163399131539	SortingVisualizer.exe	1cf0baf79c496c6d
+2	4945	1793142180993181914	CMakeFiles/SortingVisualizer.dir/src/main.cpp.obj	1782e35b6c493d74
+4945	5013	1793142185936647558	SortingVisualizer.exe	1cf0baf79c496c6d
+3	880	1793142490506563138	CMakeFiles/SortingVisualizer.dir/src/graph.cpp.obj	4385805808944bea
+2	4791	1793142490505563138	CMakeFiles/SortingVisualizer.dir/src/main.cpp.obj	1782e35b6c493d74
+4791	4852	1793142495294562989	SortingVisualizer.exe	1cf0baf79c496c6d

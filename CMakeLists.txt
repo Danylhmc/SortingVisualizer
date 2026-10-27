@@ -8,6 +8,9 @@ add_executable(SortingVisualizer
     src/main.cpp
     src/shader.cpp
     src/cube.cpp
+    src/benchMark.cpp
+    src/csv_reader.cpp
+    src/graph.cpp
     external/glad/src/glad.c
 )
 
@@ -35,7 +38,7 @@ target_link_libraries(SortingVisualizer
   PRIVATE
   OpenGL::GL
     glfw
-    glm
+    glm::glm
 )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
